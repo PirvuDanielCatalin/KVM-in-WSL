@@ -1,0 +1,10 @@
+<network>
+  <name>__NET_NAME__</name>
+  <bridge name='__BRIDGE__' stp='on' delay='0'/>
+  <forward mode='nat'/>
+  <ip address='__GATEWAY__' netmask='__NETMASK__'>
+    <dhcp>
+      <range start='__DHCP_START__' end='__DHCP_END__'/>
+    </dhcp>
+  </ip>
+</network>

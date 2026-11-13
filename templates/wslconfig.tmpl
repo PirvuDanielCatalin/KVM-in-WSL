@@ -1,0 +1,33 @@
+[wsl2]
+# --- Memory / CPU
+memory=__MEMORY_GB__GB
+processors=__CPUS__
+swap=__SWAP_GB__GB
+
+# --- Networking: NAT stays (default). The lab's "internal" and "private" switches are
+#     emulated as Linux bridges inside this distro, so mirrored mode is NOT required.
+networkingMode=NAT
+localhostForwarding=true
+firewall=true
+dnsTunneling=true
+autoProxy=true
+
+# --- Virtualization: nested KVM (QEMU/KEMU inside this distro).
+nestedVirtualization=true
+
+# --- Lifecycle: never auto-shut the VM while the QEMU lab is running.
+vmIdleTimeout=-1
+
+# --- Kernel modules needed by Docker/k3s/bridge networking.
+loadDefaultKernelModules=true
+isolateDistroCgroup=true
+
+# --- Storage ceiling for this distro's ext4.vhdx (lives on C:).
+defaultVhdSize=120GB
+
+[experimental]
+sparseVhd=true
+autoMemoryReclaim=gradual
+
+[general]
+instanceIdleTimeout=-1

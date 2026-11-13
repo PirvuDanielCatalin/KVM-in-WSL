@@ -1,0 +1,45 @@
+<domain type='kvm'>
+  <name>__VM_NAME__</name>
+  <memory unit='MiB'>__MEM_MIB__</memory>
+  <vcpu placement='static'>__VCPU__</vcpu>
+  <os>
+    <type arch='x86_64' machine='q35'>hvm</type>
+    <loader readonly='yes' type='pflash'>__OVMF_CODE__</loader>
+    <nvram template='__OVMF_VARS__'>__NVRAM_PATH__</nvram>
+    <boot dev='hd'/>
+    <boot dev='cdrom'/>
+    <bootmenu enable='yes'/>
+  </os>
+  <features><acpi/><apic/></features>
+  <cpu mode='host-passthrough'/>
+  <clock offset='utc'/>
+  <on_poweroff>destroy</on_poweroff>
+  <on_reboot>restart</on_reboot>
+  <on_crash>restart</on_crash>
+  <devices>
+    <disk type='file' device='disk'>
+      <driver name='qemu' type='qcow2'/>
+      <source file='__DISK_PATH__'/>
+      <target dev='vda' bus='virtio'/>
+    </disk>
+    <disk type='file' device='cdrom'>
+      <driver name='qemu' type='raw'/>
+      <source file='__CLOUD_INIT_ISO__'/>
+      <target dev='sda' bus='sata'/>
+      <readonly/>
+    </disk>
+    <interface type='network'>
+      <source network='__NET_NAME__'/>
+      <mac address='__MAC__'/>
+      <model type='virtio'/>
+    </interface>
+    <serial type='pty'>
+      <log file='__CONSOLE_LOG__'/>
+      <target port='0'/>
+    </serial>
+    <console type='pty'><target type='serial' port='0'/></console>
+    <video><model type='none'/></video>
+    <input type='keyboard' bus='ps2'/>
+    <input type='mouse' bus='ps2'/>
+  </devices>
+</domain>
