@@ -192,3 +192,15 @@ mac_from_ip() {
     local last="${ip##*.}"
     printf '52:54:00:00:00:%02X' "$(( 10#$last ))"
 }
+
+# ---------------------------------------------------------------------------
+# Detectare GitLab Runner pe o VM (prin SSH)
+# /etc/gitlab-runner este drwx------ root root -> test -f cere sudo
+# ---------------------------------------------------------------------------
+is_gitlab_runner() {
+    local ip="$1"
+    local user="${SSH_USER:-ubuntu}"
+    ssh -o BatchMode=yes -o ConnectTimeout=5 "$user@$ip" \
+        "command -v gitlab-runner >/dev/null 2>&1 && sudo -n test -f /etc/gitlab-runner/config.toml" \
+        >/dev/null 2>&1
+}

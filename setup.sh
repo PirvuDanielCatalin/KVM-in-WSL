@@ -13,6 +13,8 @@
 #   6) Vizualizare VM       (detalii libvirt + instructiuni SSH WSL/Windows)
 #   7) Stergere VM
 #   8) Configure GitLab Runner      (runner GitLab pe VM existenta)
+#   9) Vizualizare GitLab Runner    (doar VM-urile deja configurate ca runner)
+#  10) Stergere GitLab Runner       (dezinstalare completa; VM reconfigurabil)
 #   0) Iesire
 # =============================================================================
 set -uo pipefail
@@ -28,15 +30,17 @@ menu() {
     echo "   Premdava WSL KVM Tool — crearea rapida de VM-uri KVM   "
     echo "   (WSL2 + libvirt + QEMU + KVM nested)                   "
     echo "============================================================"
-    echo "   1) Configurare WSL         (.wslconfig: RAM, CPU, Swap + prerequisites)"
-    echo "   2) Configurare retea libvirt (nume + CIDR)"
+    echo "   0) Iesire"
+    echo "   1) Configurare WSL             (.wslconfig: RAM, CPU, Swap + prerequisites)"
+    echo "   2) Configurare retea libvirt   (nume + CIDR)"
     echo "   3) Vizualizare retea libvirt   (detalii + lease-uri DHCP)"
-    echo "   4) Stergere retea libvirt    (doar daca nu are VM-uri)"
-    echo "   5) Configurare VM libvirt    (Ubuntu 24/26, IP, RAM, CPU)"
+    echo "   4) Stergere retea libvirt      (doar daca nu are VM-uri)"
+    echo "   5) Configurare VM libvirt      (Ubuntu 24/26, IP, RAM, CPU)"
     echo "   6) Vizualizare VM libvirt      (detalii + instructiuni SSH)"
     echo "   7) Stergere VM libvirt"
-    echo "   8) Configure GitLab Runner    (runner GitLab pe VM existenta)"
-    echo "   0) Iesire"
+    echo "   8) Configure GitLab Runner     (doar VM-urile care NU sunt runneri)"
+    echo "   9) Vizualizare GitLab Runner   (doar VM-urile deja configurate)"
+    echo "  10) Stergere GitLab Runner      (dezinstalare completa de pe VM)"
     echo "------------------------------------------------------------"
     echo "   Dir lucru: $SCRIPT_DIR"
     echo "   Stare:     ${WSL_KVM_STATE_DIR:-$HOME/.infra-lab/wsl-kvm}"
@@ -54,6 +58,8 @@ run() {
         6) bash "$SCRIPTS_DIR/vm-show.sh" ;;
         7) bash "$SCRIPTS_DIR/vm-delete.sh" ;;
         8) bash "$SCRIPTS_DIR/gitlab-runner-config.sh" ;;
+        9) bash "$SCRIPTS_DIR/gitlab-runner-show.sh" ;;
+        10) bash "$SCRIPTS_DIR/gitlab-runner-delete.sh" ;;
         *) echo "Optiune necunoscuta: $opt" >&2 ;;
     esac
 }
@@ -67,10 +73,10 @@ fi
 # Buclu interactiv
 while true; do
     menu
-    read -r -p "Alegere [0-8]: " choice
+    read -r -p "Alegere [0-10]: " choice
     case "$choice" in
         0) echo "La revedere."; exit 0 ;;
-        1|2|3|4|5|6|7|8) run "$choice" ;;
+        1|2|3|4|5|6|7|8|9|10) run "$choice" ;;
         *) echo "Optiune invalida." ;;
     esac
     echo

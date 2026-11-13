@@ -25,13 +25,7 @@ if [ ! -s "$REGISTRY" ]; then
     exit 0
 fi
 
-# --- Functie: verifica prin SSH daca VM-ul e deja GitLab Runner -------------
-is_gitlab_runner() {
-    local ip=$1
-    ssh -o BatchMode=yes -o ConnectTimeout=5 "$SSH_USER@$ip" \
-        "command -v gitlab-runner >/dev/null 2>&1 && [ -f /etc/gitlab-runner/config.toml ]" \
-        >/dev/null 2>&1
-}
+# --- Verificare: VM-ul e deja GitLab Runner? (functie partajata din lib.sh) ---
 
 # --- Colectare VM-uri care nu sunt GitLab Runners ---------------------------
 declare -a ELIGIBLE_VMS=()
@@ -101,24 +95,14 @@ echo
 echo "[INFO] Se configureaza GitLab Runner pe $VM_NAME ($VM_IP)..."
 
 # --- Executie pe VM via SSH (fara flag de cheie, cheia default e id_rsa) ---
-# Heredoc NEinchis: $GITLAB_URL, $GITLAB_TOKEN, $VM_NAME, $VM_IP se extind local
-# (valori cunoscute la momentul rularii). Comenzile specifice remote
-# ($(dpkg ...), $(lsb_release ...)) sunt escapse cu backslash ca sa se extinda
-# pe VM, nu local. GITLEAKS_VERSION e hardcodat (constanta).
-# set -e (fara set -x): oprire la eroare, fara tracerea fiecarei comenzi in log;
-# vizibile sunt doar anteturile >>> PAS X/10:.
-# Initializare $1 ca gol pentru a evita 'unbound variable' cu set -u local:
-# heredoc-ul << REMOTE_EOF (fara apostrofe) este parsat local si orice referinta
-# la $1 nedefinita eșuează aici. Scriptul nu primeste argumente posizionale.
-set -- "${1:-}"
-# Dezactiveaza set -u local inainte de heredoc: << REMOTE_EOF (fara apostrofe)
-# este parsat local si orice variabile nedefinita in conținutul remote
-# (de ex. $1 in definiția funcției get_version) eșuează cu set -u.
-set +u
-ssh -t "$SSH_USER@$VM_IP" << REMOTE_EOF
+# Heredoc CU apostrofe ('REMOTE_EOF'): continutul NU se expandeaza local.
+# Toate $(...), $?, $HOME si variabilele de stare se evalueaza pe VM.
+# Variabilele necesare remote (GITLAB_URL, GITLAB_TOKEN, VM_NAME, VM_IP, SSH_USER)
+# sunt pasate ca prefix env pe linia de comanda ssh; `bash -s` le citeste din mediu.
+ssh -t "$SSH_USER@$VM_IP" \
+    "GITLAB_URL='$GITLAB_URL' GITLAB_TOKEN='$GITLAB_TOKEN' VM_NAME='$VM_NAME' VM_IP='$VM_IP' SSH_USER='$SSH_USER' bash -s" << 'REMOTE_EOF'
 set -e
-# Dezactiveaza set -u in sesiunea remote: remote shell poate avea set -u din .bashrc,
-# iar $1 (fara argumente pasate la ssh) ar provoca 'unbound variable'.
+# Dezactiveaza set -u in sesiunea remote (unele .bashrc-uri il activeaza).
 set +u
 
 export DEBIAN_FRONTEND=noninteractive
@@ -129,6 +113,7 @@ sudo rm -f /etc/apt/sources.list.d/docker.list /etc/apt/sources.list.d/trivy.lis
 # 1. Docker CE (necesar de job-urile docker_build / docker_push / trivy_image_scan)
 echo ">>> PAS 1/10: Instalare Docker CE"
 sudo apt-get update -y
+sudo apt-get upgrade -y
 sudo apt-get install -y ca-certificates curl gnupg lsb-release
 sudo install -m 0755 -d /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor --batch --yes -o /etc/apt/keyrings/docker.gpg
@@ -141,10 +126,15 @@ sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plug
 echo ">>> PAS 2/10: Instalare Python + git"
 sudo apt-get install -y python3 python3-pip python3-venv git
 
-# 3. Unelte de scanare (bandit, flake8, semgrep, trufflehog)
-echo ">>> PAS 3/10: Instalare unelte de scanare Python"
+# 3. Unelte de scanare (bandit, flake8, semgrep — pip; trufflehog — binar Go)
+echo ">>> PAS 3/10: Instalare unelte de scanare"
 # Ubuntu 26.04 are PEP 668 (externally managed environment) -> --break-system-packages
-pip3 install --break-system-packages bandit flake8 semgrep trufflehog
+pip3 install --break-system-packages bandit flake8 semgrep
+# TruffleHog v3 este un binar Go. Pachetul PyPI 'trufflehog' este vechiul 2.x
+# (Python) si crapa cu Traceback pe Python 3.14 -> il eliminam daca exista,
+# apoi instalăm binarul oficial de la trufflesecurity.
+pip3 uninstall -y trufflehog --break-system-packages 2>/dev/null || true
+curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sudo sh -s -- -b /usr/local/bin
 
 # 4. Gitleaks (binar Go, nu e pe PyPI) — descarcare de la GitHub Releases
 echo ">>> PAS 4/10: Instalare gitleaks"
@@ -176,6 +166,13 @@ sudo usermod -aG docker gitlab-runner
 #    Daca config.toml contine deja 'concurrent = ...' (de la o rulare veche),
 #    register paniceaza -> il stergem inainte.
 echo ">>> PAS 8/10: Inregistrare runner GitLab"
+# Elimina intrările [[runners]] vechi: fiecare reînregistrare adaugă o secțiune
+# nouă, iar config.toml crește necontrolat (același runner id se repetă).
+if sudo test -f /etc/gitlab-runner/config.toml; then
+    sudo awk '/^\[\[runners\]\]/{exit} {print}' /etc/gitlab-runner/config.toml \
+        | sudo tee /etc/gitlab-runner/config.toml.tmp > /dev/null
+    sudo mv /etc/gitlab-runner/config.toml.tmp /etc/gitlab-runner/config.toml
+fi
 # Sterge linia 'concurrent' din config.toml (daca exista) pentru a evita panicul
 # la register: GitLab interzice cheia duplicata. Se face cu sudo pentru ca
 # ubuntu nu are citire directa pe /etc/gitlab-runner/config.toml.
@@ -213,59 +210,78 @@ export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$HOME/
 echo ">>> PAS 10/10: Afișare versiuni tool-uri instalate"
 echo "============================================================"
 
-# Helper: capturează outputul, returnează prima linie sau "nesiguran".
-# set +e / set -e în jurul capturii pentru a nu opri execuția la "command not found".
-show_ver() {
-    local cmd="$1" out
-    set +e
-    out=$(eval "$cmd" 2>&1)
-    set -e
-    if [ -z "$out" ]; then
-        echo "nesiguran"
-    else
-        echo "$out" | head -1
-    fi
-}
-
 echo "GitLab Runner:"
-show_ver "sudo gitlab-runner --version 2>/dev/null || sudo gitlab-runner version 2>/dev/null || true"
+set +e
+VER=$(gitlab-runner --version 2>&1)
+RC=$?
+if [ $RC -ne 0 ]; then
+    VER=$(gitlab-runner version 2>&1)
+fi
+set -e
+if [ -z "$VER" ]; then echo "nesiguran"; else echo "$VER" | head -1; fi
 echo
 echo "Docker:"
-show_ver "docker --version 2>&1 || true"
+set +e
+VER=$(docker --version 2>&1)
+set -e
+if [ -z "$VER" ]; then echo "nesiguran"; else echo "$VER" | head -1; fi
 echo
 echo "Docker Compose:"
-show_ver "docker compose version 2>&1 || true"
+set +e
+VER=$(docker compose version 2>&1)
+set -e
+if [ -z "$VER" ]; then echo "nesiguran"; else echo "$VER" | head -1; fi
 echo
 echo "Python:"
-show_ver "python3 --version 2>&1 || true"
+set +e
+VER=$(python3 --version 2>&1)
+set -e
+if [ -z "$VER" ]; then echo "nesiguran"; else echo "$VER" | head -1; fi
 echo
 echo "Pip:"
-show_ver "pip3 --version 2>&1 || true"
+set +e
+VER=$(pip3 --version 2>&1)
+set -e
+if [ -z "$VER" ]; then echo "nesiguran"; else echo "$VER" | head -1; fi
 echo
 echo "Git:"
-show_ver "git --version 2>&1 || true"
+set +e
+VER=$(git --version 2>&1)
+set -e
+if [ -z "$VER" ]; then echo "nesiguran"; else echo "$VER" | head -1; fi
 echo
 echo "Unelte de scanare:"
-echo -n "  bandit:    "; show_ver "bandit --version 2>&1 || bandit -v 2>&1 || python3 -m bandit --version 2>&1 || true"
-echo -n "  flake8:    "; show_ver "flake8 --version 2>&1 || flake8 -V 2>&1 || true"
-echo -n "  semgrep:   "; show_ver "semgrep --version 2>&1 || true"
-echo -n "  trufflehog: "; show_ver "trufflehog --version 2>&1 || trufflehog version 2>&1 || true"
-echo -n "  gitleaks:  "; show_ver "gitleaks version 2>&1 || gitleaks --version 2>&1 || true"
-echo -n "  trivy:     "; show_ver "trivy --version 2>&1 || true"
+echo -n "  bandit:    "; set +e; VER=$(bandit --version 2>&1); [ $? -ne 0 ] && VER=$(bandit -v 2>&1); [ -z "$VER" ] && VER=$(python3 -m bandit --version 2>&1); set -e; if [ -z "$VER" ]; then echo "nesiguran"; else echo "$VER" | head -1; fi
+echo -n "  flake8:    "; set +e; VER=$(flake8 --version 2>&1); [ $? -ne 0 ] && VER=$(flake8 -V 2>&1); set -e; if [ -z "$VER" ]; then echo "nesiguran"; else echo "$VER" | head -1; fi
+echo -n "  semgrep:   "; set +e; VER=$(semgrep --version 2>&1); set -e; if [ -z "$VER" ]; then echo "nesiguran"; else echo "$VER" | head -1; fi
+echo -n "  trufflehog: "; set +e; VER=$(trufflehog --version 2>&1); [ $? -ne 0 ] && VER=$(trufflehog version 2>&1); set -e; if [ -z "$VER" ]; then echo "nesiguran"; else echo "$VER" | head -1; fi
+echo -n "  gitleaks:  "; set +e; VER=$(gitleaks version 2>&1); [ $? -ne 0 ] && VER=$(gitleaks --version 2>&1); set -e; if [ -z "$VER" ]; then echo "nesiguran"; else echo "$VER" | head -1; fi
+echo -n "  trivy:     "; set +e; VER=$(trivy --version 2>&1); set -e; if [ -z "$VER" ]; then echo "nesiguran"; else echo "$VER" | head -1; fi
+# Rezumat final: datele REALE ale runner-ului, citite din config.toml
+RUNNER_CFG=/etc/gitlab-runner/config.toml
+RUNNER_NAME=$(sudo awk -F' *= *' '/^ *name = /{gsub(/"/,"",$2); print $2}' "$RUNNER_CFG" | tail -1)
+RUNNER_ID=$(sudo awk -F' *= *' '/^ *id = /{print $2}' "$RUNNER_CFG" | tail -1)
+RUNNER_URL_CFG=$(sudo awk -F' *= *' '/^ *url = /{gsub(/"/,"",$2); print $2}' "$RUNNER_CFG" | tail -1)
+RUNNER_EXEC=$(sudo awk -F' *= *' '/^ *executor = /{gsub(/"/,"",$2); print $2}' "$RUNNER_CFG" | tail -1)
+RUNNER_CONC=$(sudo awk -F' *= *' '/^concurrent =/{print $2}' "$RUNNER_CFG" | head -1)
+RUNNER_TAGS=$(sudo awk -F' *= *' '/^ *tag_list = /{gsub(/"/,"",$2); print $2}' "$RUNNER_CFG" | tail -1)
+
 echo "============================================================"
-echo -n "  trufflehog: "; get_version "trufflehog --version 2>&1 || trufflehog version 2>&1"
-echo -n "  gitleaks:  "; get_version "gitleaks version 2>&1 || gitleaks --version 2>&1"
-echo -n "  trivy:     "; get_version "trivy --version 2>&1"
+echo "=== Date Runner ==="
+echo "  Nume:        ${RUNNER_NAME:-$VM_NAME-gitlab-runner}"
+echo "  ID:          ${RUNNER_ID:-?}"
+echo "  URL:         ${RUNNER_URL_CFG:-$GITLAB_URL}"
+echo "  Executor:    ${RUNNER_EXEC:-shell}"
+if [ -n "$RUNNER_TAGS" ]; then
+    echo "  Tag-uri:     $RUNNER_TAGS"
+else
+    echo "  Tag-uri:     ${RUNNER_TAGS_DEFAULT:-premdava-export, premdava-export-ui}"
+    echo "               (setate in GitLab UI: $GITLAB_URL → CI/CD > Runners > ${RUNNER_NAME:-$VM_NAME-gitlab-runner} > Edit)"
+fi
+echo "  Concurenta:  ${RUNNER_CONC:-1} (un job Docker la un timp)"
+echo "  Descriere:   $VM_NAME-gitlab-runner"
+echo "  SSH:         ssh $SSH_USER@$VM_IP"
 echo "============================================================"
 
 echo "[OK] GitLab Runner configurat pe $VM_NAME ($VM_IP)"
 REMOTE_EOF
-
-echo
-echo "[OK] GitLab Runner configurat cu succes pe $VM_NAME ($VM_IP)."
-echo "     Executor: shell"
-echo "     Tag-uri: premdava-export, premdava-export-ui"
-echo "              ^^^ setale manual in GitLab UI (CI/CD > Runners > $VM_NAME-gitlab-runner > Edit)"
-echo "              (cu token de autentificare, tag-urile nu pot fi setate de la linia de comanda)"
-echo "     Concurenta: 1 (un job Docker la un timp)"
-echo "     SSH: ssh $SSH_USER@$VM_IP"
