@@ -1,20 +1,27 @@
 #!/usr/bin/env bash
 # =============================================================================
 # gitlab-runner-config.sh - Configureaza GitLab Runner pe o VM existenta
-# Intraba: nume VM (din registry), URL GitLab, registration token
+# Intraba: nume VM (din registry), URL GitLab, authentication token
 # Listeaza doar VM-urile care NU sunt deja GitLab Runners (verificat prin SSH).
 # Face SSH automat pe VM, instaleaza Docker + unelte de scan + GitLab Runner,
-# inregistreaza runner-ul cu tag-urile confluence-export si confluence-export-ui
-# si activeaza concurenta = 1 (sigur pentru Docker daemon unic).
+# configureaza un director de lucru dedicat userului gitlab-runner, afiseaza
+# versiunile si activeaza concurenta = 1 (sigur pentru Docker daemon unic).
 #
-# Default-uri: URL GitLab si registration token se preiau din variabilele de
+# Default-uri: URL GitLab si authentication token se preiau din variabilele de
 # mediu $GITLAB_URL si $GITLAB_TOKEN daca sunt setate; altfel sunt obligatorii
 # de la tastatura. Apasarea ENTER pastreaza valoarea din mediu.
+# Tag-urile pot fi setate la crearea tokenului in GitLab sau, optional, prin API
+# daca este setat $GITLAB_API_TOKEN (token cu drept de manage runner).
 # =============================================================================
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 SSH_USER="${SSH_USER:-ubuntu}"
+RUNNER_WORK_DIR="/home/gitlab-runner"
+GITLAB_TAGS="${GITLAB_TAGS:-confluence-export,confluence-export-ui}"
+# Normalizeaza spatiile din lista (ex. "tag1, tag2" -> "tag1,tag2").
+GITLAB_TAGS="${GITLAB_TAGS// /}"
+GITLAB_API_TOKEN="${GITLAB_API_TOKEN:-}"
 
 echo "=== Configure GitLab Runner ==="
 echo
@@ -100,10 +107,14 @@ echo "[INFO] Se configureaza GitLab Runner pe $VM_NAME ($VM_IP)..."
 # Variabilele necesare remote (GITLAB_URL, GITLAB_TOKEN, VM_NAME, VM_IP, SSH_USER)
 # sunt pasate ca prefix env pe linia de comanda ssh; `bash -s` le citeste din mediu.
 ssh -t "$SSH_USER@$VM_IP" \
-    "GITLAB_URL='$GITLAB_URL' GITLAB_TOKEN='$GITLAB_TOKEN' VM_NAME='$VM_NAME' VM_IP='$VM_IP' SSH_USER='$SSH_USER' bash -s" << 'REMOTE_EOF'
+    "GITLAB_URL='$GITLAB_URL' GITLAB_TOKEN='$GITLAB_TOKEN' GITLAB_TAGS='$GITLAB_TAGS' GITLAB_API_TOKEN='$GITLAB_API_TOKEN' RUNNER_WORK_DIR='$RUNNER_WORK_DIR' VM_NAME='$VM_NAME' VM_IP='$VM_IP' SSH_USER='$SSH_USER' bash -s" << 'REMOTE_EOF'
 set -e
+set -o pipefail
 # Dezactiveaza set -u in sesiunea remote (unele .bashrc-uri il activeaza).
 set +u
+
+GITLEAKS_VERSION="8.30.1"
+TRIVY_VERSION="0.76.2"
 
 export DEBIAN_FRONTEND=noninteractive
 
@@ -138,18 +149,22 @@ sudo pip3 install --break-system-packages --ignore-installed bandit flake8 semgr
 sudo pip3 uninstall -y trufflehog --break-system-packages 2>/dev/null || true
 curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sudo sh -s -- -b /usr/local/bin
 
-# 4. Gitleaks (binar Go, nu e pe PyPI) - descarcare de la GitHub Releases
-echo ">>> PAS 4/11: Instalare gitleaks"
-curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v8.18.2/gitleaks_8.18.2_linux_x64.tar.gz" \
+# 4. Gitleaks (binar Go, nu e pe PyPI) - descarcare de la GitHub Releases.
+#    Versiunea este fixata pentru ca pipeline-ul sa fie reproductibil.
+echo ">>> PAS 4/11: Instalare gitleaks $GITLEAKS_VERSION"
+curl -fsSL --retry 3 "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
     | sudo tar -xz -C /usr/local/bin gitleaks
 sudo chmod +x /usr/local/bin/gitleaks
 
-# 5. Trivy (necesar de trivy_dockerfile_scan in pipeline-ul UI)
-echo ">>> PAS 5/11: Instalare trivy"
-wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo gpg --dearmor --batch --yes -o /etc/apt/keyrings/trivy.gpg
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/trivy.list > /dev/null
-sudo apt-get update -y
-sudo apt-get install -y trivy
+# 5. Trivy (necesar de docker_image_scan). Se instaleaza binarul oficial,
+#    nu pachetul din repo-ul apt, ca versiunea sa fie exact cea testata.
+echo ">>> PAS 5/11: Instalare trivy $TRIVY_VERSION"
+curl -fsSL --retry 3 "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
+    | sudo tar -xz -C /usr/local/bin trivy
+sudo chmod +x /usr/local/bin/trivy
+# Curata pachetul vechi din repo-ul apt, daca exista, ca sa nu existe doua
+# versiuni de trivy in PATH.
+sudo apt-get remove -y trivy >/dev/null 2>&1 || true
 
 # 6. GitLab Runner
 echo ">>> PAS 6/11: Instalare GitLab Runner"
@@ -186,7 +201,32 @@ sudo gitlab-runner register \
   --description "$VM_NAME-gitlab-runner" \
   --non-interactive
 
-# 9. Siguranta concurenta: un singur job Docker la un timp pe acest daemon unic
+# 8.1 Optional: setarea tag-urilor prin API. Cu token de autentificare,
+#     gitlab-runner register nu accepta --tag-list; tag-urile se pot seta la
+#     crearea tokenului in GitLab sau cu un API token care are drept de
+#     administrare a runner-ului.
+if [ -n "$GITLAB_API_TOKEN" ]; then
+    RUNNER_ID=$(sudo awk -F' *= *' '/^ *id = /{print $2; exit}' /etc/gitlab-runner/config.toml)
+    echo ">>> Setare tag-uri prin GitLab API: $GITLAB_TAGS"
+    if curl --silent --show-error --fail --retry 2 \
+        --request PUT \
+        --header "PRIVATE-TOKEN: ${GITLAB_API_TOKEN}" \
+        --data-urlencode "tag_list=${GITLAB_TAGS}" \
+        "${GITLAB_URL%/}/api/v4/runners/${RUNNER_ID}" >/dev/null; then
+        echo "[OK] Tag-urile au fost setate prin API."
+    else
+        echo "[WARN] Nu s-au putut seta tag-urile prin API."
+        echo "       Verificati drepturile tokenului sau setati-le in GitLab UI."
+    fi
+else
+    echo "[INFO] Tag-uri asteptate: $GITLAB_TAGS"
+    echo "       Setati-le la crearea tokenului sau prin GITLAB_API_TOKEN."
+fi
+
+# 9. Siguranta concurenta: un singur job Docker la un timp pe acest daemon unic.
+#    Directorul de lucru este /home/gitlab-runner, NU /home/ubuntu: job-urile
+#    ruleaza ca userul gitlab-runner, iar /home/ubuntu are de obicei mod 750
+#    ubuntu:ubuntu, deci gitlab-runner nu poate intra in el.
 echo ">>> PAS 9/11: Setare concurenta = 1 + pornire serviciu"
 if sudo grep -q '^concurrent =' /etc/gitlab-runner/config.toml; then
     sudo sed -i 's/^concurrent = .*/concurrent = 1/' /etc/gitlab-runner/config.toml
@@ -200,7 +240,9 @@ fi
 # 'gitlab-runner enable' nu exista ca comanda -> se foloseste systemctl enable.
 sudo gitlab-runner stop 2>/dev/null || true
 sudo gitlab-runner uninstall 2>/dev/null || true
-sudo gitlab-runner install --user gitlab-runner
+sudo install -d -o gitlab-runner -g gitlab-runner -m 0750 \
+    "$RUNNER_WORK_DIR" "$RUNNER_WORK_DIR/builds" "$RUNNER_WORK_DIR/cache"
+sudo gitlab-runner install --user gitlab-runner --working-directory "$RUNNER_WORK_DIR"
 sudo systemctl enable gitlab-runner 2>/dev/null || true
 sudo gitlab-runner start
 
@@ -245,10 +287,27 @@ else
     echo "[OK] toate uneltele sunt vizibile pentru gitlab-runner"
 fi
 
+# 10.5 directorul de lucru si build dir trebuie sa fie accesibile job-urilor
+if systemctl cat gitlab-runner | grep -q -- "--working-directory.*${RUNNER_WORK_DIR}"; then
+    echo "[OK] directorul de lucru este $RUNNER_WORK_DIR"
+else
+    echo "[FAIL] directorul de lucru al runner-ului nu este $RUNNER_WORK_DIR"
+    exit 1
+fi
+
+if sudo -u gitlab-runner bash -lc "cd '$RUNNER_WORK_DIR/builds' && mkdir -p .permission-check && rmdir .permission-check" >/dev/null 2>&1; then
+    echo "[OK] build directory este writable pentru gitlab-runner"
+else
+    echo "[FAIL] gitlab-runner nu poate scrie in $RUNNER_WORK_DIR/builds"
+    exit 1
+fi
+
 # 11. Afisare versiunile tuturor tool-urilor instalate (verificare finala)
 # Seteaza PATH explicit: sesiunea SSH non-login nu are PATH complet.
 # Uneltele pip3 sunt instalate system-wide in /usr/local/bin (PAS 3 si 10.3).
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$HOME/.local/bin"
+# Ruleaza din /tmp: trivy incarca implicit trivy.yaml din directorul curent.
+cd /tmp
 
 echo ">>> PAS 11/11: Afisare versiuni tool-uri instalate"
 echo "============================================================"
@@ -318,8 +377,8 @@ echo "  Executor:    ${RUNNER_EXEC:-shell}"
 if [ -n "$RUNNER_TAGS" ]; then
     echo "  Tag-uri:     $RUNNER_TAGS"
 else
-    echo "  Tag-uri:     ${RUNNER_TAGS_DEFAULT:-confluence-export, confluence-export-ui}"
-    echo "               (setate in GitLab UI: $GITLAB_URL -> CI/CD > Runners > ${RUNNER_NAME:-$VM_NAME-gitlab-runner} > Edit)"
+    echo "  Tag-uri:     ${GITLAB_TAGS}"
+    echo "               (setate la crearea tokenului sau prin GITLAB_API_TOKEN)"
 fi
 echo "  Concurenta:  ${RUNNER_CONC:-1} (un job Docker la un timp)"
 echo "  Descriere:   $VM_NAME-gitlab-runner"
