@@ -4,7 +4,7 @@
 # Intraba: nume VM (din registry), URL GitLab, registration token
 # Listeaza doar VM-urile care NU sunt deja GitLab Runners (verificat prin SSH).
 # Face SSH automat pe VM, instaleaza Docker + unelte de scan + GitLab Runner,
-# inregistreaza runner-ul cu tag-urile premdava-export si premdava-export-ui
+# inregistreaza runner-ul cu tag-urile confluence-export si confluence-export-ui
 # si activeaza concurenta = 1 (sigur pentru Docker daemon unic).
 #
 # Default-uri: URL GitLab si registration token se preiau din variabilele de
@@ -275,7 +275,7 @@ echo "  Executor:    ${RUNNER_EXEC:-shell}"
 if [ -n "$RUNNER_TAGS" ]; then
     echo "  Tag-uri:     $RUNNER_TAGS"
 else
-    echo "  Tag-uri:     ${RUNNER_TAGS_DEFAULT:-premdava-export, premdava-export-ui}"
+    echo "  Tag-uri:     ${RUNNER_TAGS_DEFAULT:-confluence-export, confluence-export-ui}"
     echo "               (setate in GitLab UI: $GITLAB_URL → CI/CD > Runners > ${RUNNER_NAME:-$VM_NAME-gitlab-runner} > Edit)"
 fi
 echo "  Concurenta:  ${RUNNER_CONC:-1} (un job Docker la un timp)"

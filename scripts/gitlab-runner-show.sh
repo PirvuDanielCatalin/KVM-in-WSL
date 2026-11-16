@@ -84,7 +84,7 @@ echo "  Executor:    ${RUNNER_EXEC:-?}"
 if [ -n "$RUNNER_TAGS" ]; then
     echo "  Tag-uri:     $RUNNER_TAGS"
 else
-    echo "  Tag-uri:     ${RUNNER_TAGS_DEFAULT:-premdava-export, premdava-export-ui}"
+    echo "  Tag-uri:     ${RUNNER_TAGS_DEFAULT:-confluence-export, confluence-export-ui}"
     echo "               (setate in GitLab UI: ${RUNNER_URL_CFG:-<url>} → CI/CD > Runners > ${RUNNER_NAME:-$VM_NAME-gitlab-runner} > Edit)"
 fi
 echo "  Concurenta:  ${RUNNER_CONC:-1} (un job Docker la un timp)"
