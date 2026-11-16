@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# vm-delete.sh — Stergere VM libvirt
+# vm-delete.sh - Stergere VM libvirt
 # Intraba: nume VM
 # =============================================================================
 set -euo pipefail

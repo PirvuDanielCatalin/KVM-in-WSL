@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# network-create.sh — Configurare retea in libvirt
+# network-create.sh - Configurare retea in libvirt
 # Intraba: nume retea + CIDR -> genereaza XML + virsh net-define/start/autostart
 # =============================================================================
 set -euo pipefail

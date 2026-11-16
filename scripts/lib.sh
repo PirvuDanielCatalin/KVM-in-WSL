@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# lib.sh — helpers compartimentati pentru wsl-kvm
+# lib.sh - helpers compartimentati pentru wsl-kvm
 # Sursa de aici din orice script din scripts/ cu:
 #   source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 # =============================================================================
@@ -136,8 +136,8 @@ net_cidr_of() {
 # ---------------------------------------------------------------------------
 kvm_preflight() {
     local ok=1
-    [ -e /dev/kvm ] || { echo "[FAIL] /dev/kvm lipseste — activeaza nestedVirtualization=true in .wslconfig si reporniti WSL"; ok=0; }
-    groups | grep -qw kvm   || { echo "[WARN] utilizatorul nu e in grupul 'kvm' (QEMU va rula pe TCQ — lent)"; }
+    [ -e /dev/kvm ] || { echo "[FAIL] /dev/kvm lipseste - activeaza nestedVirtualization=true in .wslconfig si reporniti WSL"; ok=0; }
+    groups | grep -qw kvm   || { echo "[WARN] utilizatorul nu e in grupul 'kvm' (QEMU va rula pe TCQ - lent)"; }
     groups | grep -qw libvirt || { echo "[WARN] utilizatorul nu e in grupul 'libvirt' (virsh cere sudo)"; }
     systemctl is-active --quiet libvirtd 2>/dev/null || { echo "[WARN] libvirtd nu ruleaza: sudo systemctl start libvirtd"; }
     return $ok

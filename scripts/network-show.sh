@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# network-show.sh — Vizualizare detalii retea libvirt
+# network-show.sh - Vizualizare detalii retea libvirt
 # Intraba: nume retea (cerut interactiva)
 # Afiseaza: informatii libvirt, XML, detalii din registry, lease-uri DHCP
 # =============================================================================

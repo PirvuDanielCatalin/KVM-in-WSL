@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# vm-show.sh — Vizualizare detalii VM libvirt + instructiuni SSH
+# vm-show.sh - Vizualizare detalii VM libvirt + instructiuni SSH
 # Intraba: nume VM (cerut interactiva)
 # Afiseaza: stare domeniu, detalii din registry, XML dumpxml, SSH din WSL/Windows
 # =============================================================================
@@ -54,7 +54,7 @@ echo "=== Conectare SSH ==="
 if [ -n "$VM_IP" ]; then
     echo "IP VM: $VM_IP"
 else
-    echo "IP VM: (necunoscut — cauta in 'virsh dumpxml $VM_NAME' sau in registry)"
+    echo "IP VM: (necunoscut - cauta in 'virsh dumpxml $VM_NAME' sau in registry)"
 fi
 echo
 echo "Din WSL:"
@@ -66,7 +66,7 @@ echo "  wsl -e ssh -i \"$SSH_PRIV_KEY\" ubuntu@${VM_IP:-<IP-VM>}"
 echo "  # sau direct din Windows (daca portproxy / WSL IP forwarding e configurat):"
 echo "  ssh -i C:\\\\Users\\\\<tu>\\\\.ssh\\\\id_rsa ubuntu@<IP-WSL-forwardat>"
 echo
-echo "Notă: cheia privata este identica pe Windows si WSL."
+echo "Nota: cheia privata este identica pe Windows si WSL."
 echo "      Asigura-te ca $SSH_PUB_KEY este injectata in VM (fie la creare, fie manual)."
 if [ -f "$SSH_PUB_KEY" ]; then
     echo "[OK] Cheia publica gasita: $SSH_PUB_KEY"

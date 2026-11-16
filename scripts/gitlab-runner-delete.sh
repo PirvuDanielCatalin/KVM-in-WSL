@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# gitlab-runner-delete.sh — Stergere completa GitLab Runner de pe o VM
+# gitlab-runner-delete.sh - Stergere completa GitLab Runner de pe o VM
 # Listeaza DOAR VM-urile configurate ca GitLab Runner, cere selectia si
 # dezinstaleaza runnerul (serviciu, pachet, binare, config, user) astfel incat
 # VM-ul sa poata fi reconfigurat cu optiunea 8.

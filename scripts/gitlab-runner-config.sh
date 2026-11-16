@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# gitlab-runner-config.sh — Configureaza GitLab Runner pe o VM existenta
+# gitlab-runner-config.sh - Configureaza GitLab Runner pe o VM existenta
 # Intraba: nume VM (din registry), URL GitLab, registration token
 # Listeaza doar VM-urile care NU sunt deja GitLab Runners (verificat prin SSH).
 # Face SSH automat pe VM, instaleaza Docker + unelte de scan + GitLab Runner,
@@ -72,7 +72,7 @@ echo
 echo "[INFO] VM selectat: $VM_NAME ($VM_IP)"
 echo
 
-# --- Date GitLab: default din mediu, obligatoriu din tastatura daca lipsește --
+# --- Date GitLab: default din mediu, obligatoriu din tastatura daca lipseste --
 if [ -n "${GITLAB_URL:-}" ]; then
     read -r -p "URL GitLab [$GITLAB_URL]: " GITLAB_URL_INPUT
     GITLAB_URL="${GITLAB_URL_INPUT:-$GITLAB_URL}"
@@ -111,7 +111,7 @@ export DEBIAN_FRONTEND=noninteractive
 sudo rm -f /etc/apt/sources.list.d/docker.list /etc/apt/sources.list.d/trivy.list 2>/dev/null || true
 
 # 1. Docker CE (necesar de job-urile docker_build / docker_push / trivy_image_scan)
-echo ">>> PAS 1/10: Instalare Docker CE"
+echo ">>> PAS 1/11: Instalare Docker CE"
 sudo apt-get update -y
 sudo apt-get upgrade -y
 sudo apt-get install -y ca-certificates curl gnupg lsb-release
@@ -123,39 +123,41 @@ sudo apt-get update -y
 sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
 # 2. Python + git (necesar de job-urile python_test / python_unit_tests)
-echo ">>> PAS 2/10: Instalare Python + git"
+echo ">>> PAS 2/11: Instalare Python + git"
 sudo apt-get install -y python3 python3-pip python3-venv git
 
-# 3. Unelte de scanare (bandit, flake8, semgrep — pip; trufflehog — binar Go)
-echo ">>> PAS 3/10: Instalare unelte de scanare"
+# 3. Unelte de scanare (bandit, flake8, semgrep - pip; trufflehog - binar Go)
+echo ">>> PAS 3/11: Instalare unelte de scanare"
 # Ubuntu 26.04 are PEP 668 (externally managed environment) -> --break-system-packages
-pip3 install --break-system-packages bandit flake8 semgrep
+# Se instaleaza cu sudo (system-wide, in /usr/local): userul gitlab-runner are alt
+# HOME decat ubuntu, deci un install in ~/.local/bin nu ar fi vizibil in pipeline-uri.
+sudo pip3 install --break-system-packages --ignore-installed bandit flake8 semgrep
 # TruffleHog v3 este un binar Go. Pachetul PyPI 'trufflehog' este vechiul 2.x
 # (Python) si crapa cu Traceback pe Python 3.14 -> il eliminam daca exista,
-# apoi instalăm binarul oficial de la trufflesecurity.
-pip3 uninstall -y trufflehog --break-system-packages 2>/dev/null || true
+# apoi instalam binarul oficial de la trufflesecurity.
+sudo pip3 uninstall -y trufflehog --break-system-packages 2>/dev/null || true
 curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sudo sh -s -- -b /usr/local/bin
 
-# 4. Gitleaks (binar Go, nu e pe PyPI) — descarcare de la GitHub Releases
-echo ">>> PAS 4/10: Instalare gitleaks"
+# 4. Gitleaks (binar Go, nu e pe PyPI) - descarcare de la GitHub Releases
+echo ">>> PAS 4/11: Instalare gitleaks"
 curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v8.18.2/gitleaks_8.18.2_linux_x64.tar.gz" \
     | sudo tar -xz -C /usr/local/bin gitleaks
 sudo chmod +x /usr/local/bin/gitleaks
 
 # 5. Trivy (necesar de trivy_dockerfile_scan in pipeline-ul UI)
-echo ">>> PAS 5/10: Instalare trivy"
+echo ">>> PAS 5/11: Instalare trivy"
 wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo gpg --dearmor --batch --yes -o /etc/apt/keyrings/trivy.gpg
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/trivy.list > /dev/null
 sudo apt-get update -y
 sudo apt-get install -y trivy
 
 # 6. GitLab Runner
-echo ">>> PAS 6/10: Instalare GitLab Runner"
+echo ">>> PAS 6/11: Instalare GitLab Runner"
 curl -L "https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.deb.sh" | sudo bash
 sudo apt-get install -y gitlab-runner
 
 # 7. Utilizatorul gitlab-runner trebuie sa aiba acces la Docker daemon
-echo ">>> PAS 7/10: Adaugare gitlab-runner in grupul docker"
+echo ">>> PAS 7/11: Adaugare gitlab-runner in grupul docker"
 sudo usermod -aG docker gitlab-runner
 
 # 8. Registrare runner (executor shell).
@@ -165,9 +167,9 @@ sudo usermod -aG docker gitlab-runner
 #    (URL, nume, executor) care ar consuma liniile urmatore din heredoc.
 #    Daca config.toml contine deja 'concurrent = ...' (de la o rulare veche),
 #    register paniceaza -> il stergem inainte.
-echo ">>> PAS 8/10: Inregistrare runner GitLab"
-# Elimina intrările [[runners]] vechi: fiecare reînregistrare adaugă o secțiune
-# nouă, iar config.toml crește necontrolat (același runner id se repetă).
+echo ">>> PAS 8/11: Inregistrare runner GitLab"
+# Elimina intrarile [[runners]] vechi: fiecare reinregistrare adauga o sectiune
+# noua, iar config.toml creste necontrolat (acelasi runner id se repeta).
 if sudo test -f /etc/gitlab-runner/config.toml; then
     sudo awk '/^\[\[runners\]\]/{exit} {print}' /etc/gitlab-runner/config.toml \
         | sudo tee /etc/gitlab-runner/config.toml.tmp > /dev/null
@@ -185,7 +187,7 @@ sudo gitlab-runner register \
   --non-interactive
 
 # 9. Siguranta concurenta: un singur job Docker la un timp pe acest daemon unic
-echo ">>> PAS 9/10: Setare concurenta = 1 + pornire serviciu"
+echo ">>> PAS 9/11: Setare concurenta = 1 + pornire serviciu"
 if sudo grep -q '^concurrent =' /etc/gitlab-runner/config.toml; then
     sudo sed -i 's/^concurrent = .*/concurrent = 1/' /etc/gitlab-runner/config.toml
 else
@@ -202,12 +204,53 @@ sudo gitlab-runner install --user gitlab-runner
 sudo systemctl enable gitlab-runner 2>/dev/null || true
 sudo gitlab-runner start
 
-# 10. Afișare versiunile tuturor tool-urilor instalate (verificare finală)
-# Setează PATH explicit: sesiunea SSH non-login nu are PATH complet,
-# iar uneltele pip3 stau în ~/.local/bin.
+# 10. Permisiuni: userul gitlab-runner (sub care ruleaza joburile din pipeline)
+#     trebuie sa poata folosi sudo, Docker si toate uneltele instalate pe VM.
+echo ">>> PAS 10/11: Permisiuni pentru userul gitlab-runner"
+
+# 10.1 sudo fara parola pentru comenzile din pipeline
+echo 'gitlab-runner ALL=(ALL) NOPASSWD:ALL' | sudo tee /etc/sudoers.d/gitlab-runner > /dev/null
+sudo chmod 0440 /etc/sudoers.d/gitlab-runner
+sudo visudo -cf /etc/sudoers.d/gitlab-runner > /dev/null && echo "[OK] sudoers NOPASSWD configurat"
+
+# 10.2 acces la Docker daemon
+sudo usermod -aG docker gitlab-runner
+echo "[OK] gitlab-runner adaugat in grupul docker"
+
+# 10.3 uneltele pip trebuie sa fie system-wide (/usr/local), nu in ~/.local
+#      al userului ubuntu: gitlab-runner are alt HOME si nu le-ar vedea.
+for tool in bandit flake8 semgrep; do
+    if [ ! -x "/usr/local/bin/$tool" ]; then
+        sudo pip3 install --break-system-packages --ignore-installed "$tool" > /dev/null
+    fi
+done
+echo "[OK] uneltele pip sunt instalate system-wide"
+
+# 10.4 verificari reale, executate ca userul gitlab-runner
+sudo -u gitlab-runner sudo -n true > /dev/null 2>&1 \
+    && echo "[OK] sudo fara parola functioneaza pentru gitlab-runner" \
+    || echo "[WARN] sudo fara parola NU functioneaza pentru gitlab-runner"
+
+sudo -u gitlab-runner docker info > /dev/null 2>&1 \
+    && echo "[OK] acces Docker functioneaza pentru gitlab-runner" \
+    || echo "[WARN] acces Docker NU functioneaza (verificati grupul docker)"
+
+MISSING=""
+for tool in gitlab-runner docker git python3 pip3 bandit flake8 semgrep gitleaks trivy trufflehog; do
+    sudo -u gitlab-runner bash -lc "command -v $tool" > /dev/null 2>&1 || MISSING="$MISSING $tool"
+done
+if [ -n "$MISSING" ]; then
+    echo "[WARN] Unelte lipsa pentru gitlab-runner:$MISSING"
+else
+    echo "[OK] toate uneltele sunt vizibile pentru gitlab-runner"
+fi
+
+# 11. Afisare versiunile tuturor tool-urilor instalate (verificare finala)
+# Seteaza PATH explicit: sesiunea SSH non-login nu are PATH complet.
+# Uneltele pip3 sunt instalate system-wide in /usr/local/bin (PAS 3 si 10.3).
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$HOME/.local/bin"
 
-echo ">>> PAS 10/10: Afișare versiuni tool-uri instalate"
+echo ">>> PAS 11/11: Afisare versiuni tool-uri instalate"
 echo "============================================================"
 
 echo "GitLab Runner:"
@@ -276,7 +319,7 @@ if [ -n "$RUNNER_TAGS" ]; then
     echo "  Tag-uri:     $RUNNER_TAGS"
 else
     echo "  Tag-uri:     ${RUNNER_TAGS_DEFAULT:-confluence-export, confluence-export-ui}"
-    echo "               (setate in GitLab UI: $GITLAB_URL → CI/CD > Runners > ${RUNNER_NAME:-$VM_NAME-gitlab-runner} > Edit)"
+    echo "               (setate in GitLab UI: $GITLAB_URL -> CI/CD > Runners > ${RUNNER_NAME:-$VM_NAME-gitlab-runner} > Edit)"
 fi
 echo "  Concurenta:  ${RUNNER_CONC:-1} (un job Docker la un timp)"
 echo "  Descriere:   $VM_NAME-gitlab-runner"

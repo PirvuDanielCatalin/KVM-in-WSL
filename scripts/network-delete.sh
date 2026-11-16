@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# network-delete.sh — Stergere retea libvirt (doar daca nu are VM-uri)
+# network-delete.sh - Stergere retea libvirt (doar daca nu are VM-uri)
 # Intraba: nume retea
 # =============================================================================
 set -euo pipefail
@@ -24,7 +24,7 @@ if reg_has_vm_on_net "$NET_NAME"; then
     exit 1
 fi
 
-# Verificare suplimentare: este atașat vreun domeniu libvirt la retea?
+# Verificare suplimentare: este atasat vreun domeniu libvirt la retea?
 ATTACHED=$(virsh -c "$VIRSH_URI" list --all --name 2>/dev/null | while read -r d; do
     [ -z "$d" ] && continue
     virsh -c "$VIRSH_URI" dumpxml "$d" 2>/dev/null | grep -q "source network='$NET_NAME'" && echo "$d"

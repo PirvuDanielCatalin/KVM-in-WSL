@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# setup.sh — WSL KVM Tool (meniu interactiv)
+# setup.sh - WSL KVM Tool (meniu interactiv)
 # Ruleaza in WSL (Ubuntu). Nu ruleaza nimic in sine; doar populeaza directorul
 # cu tool-urile necesare pentru crearea rapida de VM-uri KVM sub WSL2.
 #
@@ -27,7 +27,7 @@ chmod +x "$SCRIPTS_DIR"/*.sh 2>/dev/null || true
 menu() {
     clear 2>/dev/null || true
     echo "============================================================"
-    echo "   WSL KVM Tool — crearea rapida de VM-uri KVM   "
+    echo "   WSL KVM Tool - crearea rapida de VM-uri KVM   "
     echo "   (WSL2 + libvirt + QEMU + KVM nested)                   "
     echo "============================================================"
     echo "   0) Iesire"

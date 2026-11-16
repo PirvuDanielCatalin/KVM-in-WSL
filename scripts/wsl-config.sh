@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # =============================================================================
-# wsl-config.sh — Configurare WSL (.wslconfig) + prerequisites KVM/libvirt
+# wsl-config.sh - Configurare WSL (.wslconfig) + prerequisites KVM/libvirt
 # Intraba: RAM (GB), CPU, Swap (GB) -> scrie C:\Users\<user>\.wslconfig
 # Verifica si instaleaza toolchainul KVM/libvirt, grupurile kvm/libvirt,
-# face $HOME traversabil pentru libvirt-qemu si pornește libvirtd.
+# face $HOME traversabil pentru libvirt-qemu si porneste libvirtd.
 # =============================================================================
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
@@ -11,10 +11,10 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 echo "=== 1) Configurare WSL (.wslconfig) ==="
 echo
 echo "Acest pas scrie fisierul C:\Users\<user>\.wslconfig (de pe WSL: /mnt/c/Users/<user>/.wslconfig)."
-echo "Modificările se aplică DOAR dupa 'wsl --shutdown' rulat din Windows (PowerShell)."
+echo "Modificarile se aplica DOAR dupa 'wsl --shutdown' rulat din Windows (PowerShell)."
 echo
 
-# Valoare default prudentă: 16 GB RAM, 8 CPU, 8 GB Swap
+# Valoare default prudenta: 16 GB RAM, 8 CPU, 8 GB Swap
 DEFAULT_MEM=16; DEFAULT_CPU=8; DEFAULT_SWAP=8
 
 read -r -p "RAM alocat WSL [GB] (default $DEFAULT_MEM): " MEM_GB
@@ -59,7 +59,7 @@ echo "=== Verificare virtualizare nested + KVM ==="
 if [ -c /dev/kvm ]; then
     echo "[OK] /dev/kvm exista: $(ls -l /dev/kvm | awk '{print $1, $3, $4}')"
 else
-    echo "[FAIL] /dev/kvm lipseste — activeaza nestedVirtualization=true in .wslconfig"
+    echo "[FAIL] /dev/kvm lipseste - activeaza nestedVirtualization=true in .wslconfig"
     echo "       si rulati 'wsl --shutdown' din Windows, apoi redeschideti WSL." >&2
     exit 1
 fi
@@ -96,5 +96,5 @@ virsh -c qemu:///system list --all
 echo "[OK] libvirtd pornit."
 
 echo
-echo "ATENTIE: 'instanceIdleTimeout' stă in [general], NU in [wsl2]."
+echo "ATENTIE: 'instanceIdleTimeout' sta in [general], NU in [wsl2]."
 echo "         Nu setati swapFile= cu %TEMP% (WSL creeaza swap-ul singur)."

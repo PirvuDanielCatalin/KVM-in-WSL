@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# vm-create.sh — Configurare VM in libvirt (KVM)
+# vm-create.sh - Configurare VM in libvirt (KVM)
 # Intraba: OS (Ubuntu 24/26), nume VM, IP din range, RAM (GB), CPU
 # Creeaza overlay qcow2 peste imaginea de baza + cloud-init ISO (SSH doar cheie,
 # fara parola) + domain XML + virsh define/start
@@ -204,9 +204,9 @@ for i in $(seq 1 60); do
 done
 
 if [ "$READY" -eq 1 ]; then
-    echo "[OK] VM-ul '$VM_NAME' este gata — SSH functioneaza pe $VM_IP"
+    echo "[OK] VM-ul '$VM_NAME' este gata - SSH functioneaza pe $VM_IP"
 else
-    echo "[WARN] Timp expirat (10 min) — cloud-init poate sa nu fi finalizat inca."
+    echo "[WARN] Timp expirat (10 min) - cloud-init poate sa nu fi finalizat inca."
     echo "       Verificati manual: virsh -c qemu:///system console $VM_NAME"
 fi
 
@@ -223,6 +223,6 @@ echo "            (din Windows: wsl -e ssh -i \"$SSH_PRIV_KEY\" ubuntu@$VM_IP)"
 echo "     Consola: virsh -c qemu:///system console $VM_NAME"
 echo "     Log serial: $CONSOLE_LOG"
 echo
-echo ">>> IMPORTANT: inainte de 'wsl --shutdown' (Windows), opriti grațios VM-urile:"
+echo ">>> IMPORTANT: inainte de 'wsl --shutdown' (Windows), opriti gratios VM-urile:"
 echo "     virsh -c qemu:///system shutdown $VM_NAME"
 echo "========================================================================"

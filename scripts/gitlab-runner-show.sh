@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# gitlab-runner-show.sh — Vizualizare GitLab Runner pe VM existenta
+# gitlab-runner-show.sh - Vizualizare GitLab Runner pe VM existenta
 # Listeaza DOAR VM-urile configurate ca GitLab Runner (verificat prin SSH)
 # si afiseaza datele runner-ului (echivalentul PAS 10 din config).
 # =============================================================================
@@ -64,7 +64,7 @@ ssh -t "$SSH_USER@$VM_IP" \
 set +u
 
 echo "============================================================"
-echo "=== Date Runner — $VM_NAME ($VM_IP) ==="
+echo "=== Date Runner - $VM_NAME ($VM_IP) ==="
 RUNNER_CFG=/etc/gitlab-runner/config.toml
 if ! sudo -n test -f "$RUNNER_CFG"; then
     echo "[FAIL] $RUNNER_CFG nu exista pe aceasta VM."
@@ -85,7 +85,7 @@ if [ -n "$RUNNER_TAGS" ]; then
     echo "  Tag-uri:     $RUNNER_TAGS"
 else
     echo "  Tag-uri:     ${RUNNER_TAGS_DEFAULT:-confluence-export, confluence-export-ui}"
-    echo "               (setate in GitLab UI: ${RUNNER_URL_CFG:-<url>} → CI/CD > Runners > ${RUNNER_NAME:-$VM_NAME-gitlab-runner} > Edit)"
+    echo "               (setate in GitLab UI: ${RUNNER_URL_CFG:-<url>} -> CI/CD > Runners > ${RUNNER_NAME:-$VM_NAME-gitlab-runner} > Edit)"
 fi
 echo "  Concurenta:  ${RUNNER_CONC:-1} (un job Docker la un timp)"
 echo "  Descriere:   ${RUNNER_NAME:-$VM_NAME-gitlab-runner}"
