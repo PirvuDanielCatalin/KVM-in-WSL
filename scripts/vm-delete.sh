@@ -37,7 +37,7 @@ virsh -c "$VIRSH_URI" undefine --nvram "$VM_NAME" >/dev/null 2>&1 || true
 VM_DIR="$VMS_DIR/$VM_NAME"
 if [ -d "$VM_DIR" ]; then
     rm -rf "$VM_DIR"
-    echo "[OK] Artefakte sters: $VM_DIR"
+    echo "[OK] Artefacte sterse: $VM_DIR"
 fi
 
 reg_rm_vm "$VM_NAME"

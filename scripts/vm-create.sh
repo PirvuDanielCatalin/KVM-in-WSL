@@ -124,6 +124,7 @@ else
 fi
 
 # user-data: utilizator ubuntu, cheie SSH, parola blocata, autentificare doar cheie
+# + script de curatare Docker programat in cron (root, la fiecare 2 ore)
 cat > "$CLOUD_INIT_DIR/user-data" <<EOF
 #cloud-config
 users:
@@ -135,6 +136,26 @@ users:
     lock_passwd: true
 disable_root: true
 ssh_pwauth: no
+write_files:
+  - path: /usr/local/bin/cleanup-docker.sh
+    permissions: '0755'
+    owner: root:root
+    content: |
+      #!/bin/bash
+
+      # 1. Sterge imaginile vechi premdava-confluence-export (pastreaza cea mai recenta)
+      docker image ls --format "{{.Repository}}:{{.Tag}}" | grep "^premdava-confluence-export:" | tail -n +2 | xargs -r docker image rm
+
+      # 2. Ruleaza scriptul built-in de la GitLab Runner (daca exista pe sistem)
+      if [ -x /usr/share/gitlab-runner/clear-docker-cache ]; then
+          /usr/share/gitlab-runner/clear-docker-cache
+      fi
+
+      # 3. Curata imaginile nefolosite, containerele oprite si retelele mai vechi de 24h
+      docker system prune -a -f --filter "until=24h"
+runcmd:
+  - command -v crontab >/dev/null 2>&1 || (apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq cron)
+  - (crontab -l 2>/dev/null | grep -v cleanup-docker; echo '0 */2 * * * /usr/local/bin/cleanup-docker.sh > /dev/null 2>&1') | crontab -
 EOF
 
 # meta-data
@@ -222,6 +243,7 @@ echo "     SSH:   ssh -i \"$SSH_PRIV_KEY\" ubuntu@$VM_IP"
 echo "            (din Windows: wsl -e ssh -i \"$SSH_PRIV_KEY\" ubuntu@$VM_IP)"
 echo "     Consola: virsh -c qemu:///system console $VM_NAME"
 echo "     Log serial: $CONSOLE_LOG"
+echo "     Curatare Docker: /usr/local/bin/cleanup-docker.sh (cron root, la fiecare 2 ore)"
 echo
 echo ">>> IMPORTANT: inainte de 'wsl --shutdown' (Windows), opriti gratios VM-urile:"
 echo "     virsh -c qemu:///system shutdown $VM_NAME"
