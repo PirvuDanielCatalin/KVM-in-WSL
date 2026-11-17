@@ -143,8 +143,8 @@ write_files:
     content: |
       #!/bin/bash
 
-      # 1. Sterge imaginile vechi premdava-confluence-export (pastreaza cea mai recenta)
-      docker image ls --format "{{.Repository}}:{{.Tag}}" | grep "^premdava-confluence-export:" | tail -n +2 | xargs -r docker image rm
+      # 1. Sterge imaginile vechi confluence-export (pastreaza cea mai recenta)
+      docker image ls --format "{{.Repository}}:{{.Tag}}" | grep "confluence-export" | xargs -r docker image rm
 
       # 2. Ruleaza scriptul built-in de la GitLab Runner (daca exista pe sistem)
       if [ -x /usr/share/gitlab-runner/clear-docker-cache ]; then
